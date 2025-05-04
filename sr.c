@@ -238,7 +238,9 @@ void B_input(struct pkt packet)
 
     // Always send ACK
     ackpkt.seqnum = 0;
-    ackpkt.acknum = seq;
+    // Use last in-order received packet as ACK
+    ackpkt.acknum = (expectedseqnum + SEQSPACE - 1) % SEQSPACE;
+
     for (int i = 0; i < 20; i++) ackpkt.payload[i] = '0';
     ackpkt.checksum = ComputeChecksum(ackpkt);
     tolayer3(B, ackpkt);
