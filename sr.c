@@ -167,15 +167,19 @@ void A_timerinterrupt(void)
 /* entity A routines are called. You can use it to do any initialization */
 void A_init(void)
 {
-  /* initialise A's window, buffer and sequence number */
-  A_nextseqnum = 0;  /* A starts with seq num 0, do not change this */
-  windowfirst = 0;
-  windowlast = -1;   /* windowlast is where the last packet sent is stored.  
-		     new packets are placed in winlast + 1 
-		     so initially this is set to -1
-		   */
-  windowcount = 0;
+    // Initialize sender's base and next sequence number
+    base = 0;
+    nextseqnum = 0;
+
+    // Clear the sender buffer and acknowledgment flags
+    for (int i = 0; i < SEQSPACE; i++) {
+        acked[i] = false;
+    }
+
+    if (TRACE > 0)
+        printf("----A: Selective Repeat sender initialized\n");
 }
+
 
 
 
