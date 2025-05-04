@@ -198,6 +198,9 @@ void A_init(void)
 
 static int expectedseqnum = 0;  // The next expected sequence number at receiver
 static int B_acknum = 0;        // For alternating seqnum in ACKs
+static struct pkt receiver_buffer[SEQSPACE];  // buffer for out-of-order packets
+static bool received[SEQSPACE];               // bitmap to track which packets are stored
+
 
 
 /* called from layer 3, when a packet arrives for layer 4 at B*/
@@ -205,12 +208,10 @@ void B_input(struct pkt packet)
 {
     struct pkt ackpkt;
 
-    // Check for corruption
     if (IsCorrupted(packet)) {
         if (TRACE > 0)
-            printf("----B: Received corrupted packet, sending last ACK %d\n", B_acknum);
+            printf("----B: Received corrupted packet, resend ACK %d\n", B_acknum);
 
-        // Resend last ACK
         ackpkt.seqnum = 0;
         ackpkt.acknum = B_acknum;
         for (int i = 0; i < 20; i++) ackpkt.payload[i] = '0';
@@ -219,43 +220,54 @@ void B_input(struct pkt packet)
         return;
     }
 
-    // If packet is the expected one
-    if (packet.seqnum == expectedseqnum) {
+    int seq = packet.seqnum;
+
+    // Store if not received before
+    if (!received[seq]) {
+        receiver_buffer[seq] = packet;
+        received[seq] = true;
+    }
+
+    // Always send ACK
+    ackpkt.seqnum = 0;
+    ackpkt.acknum = seq;
+    for (int i = 0; i < 20; i++) ackpkt.payload[i] = '0';
+    ackpkt.checksum = ComputeChecksum(ackpkt);
+    tolayer3(B, ackpkt);
+
+    if (TRACE > 0)
+        printf("----B: ACK sent for packet %d\n", seq);
+
+    // Deliver all in-order packets starting from expectedseqnum
+    while (received[expectedseqnum]) {
+        tolayer5(B, receiver_buffer[expectedseqnum].payload);
+        received[expectedseqnum] = false;  // Mark as delivered
+
         if (TRACE > 0)
-            printf("----B: Received expected packet %d, delivering to application\n", packet.seqnum);
+            printf("----B: Delivered buffered packet %d to application\n", expectedseqnum);
 
-        tolayer5(B, packet.payload);
-        packets_received++;
-
-        // Prepare and send ACK
-        ackpkt.seqnum = 0;
-        ackpkt.acknum = expectedseqnum;
-        for (int i = 0; i < 20; i++) ackpkt.payload[i] = '0';
-        ackpkt.checksum = ComputeChecksum(ackpkt);
-        tolayer3(B, ackpkt);
-
-        B_acknum = expectedseqnum;
         expectedseqnum = (expectedseqnum + 1) % SEQSPACE;
-    } else {
-        // Received out-of-order packet, send ACK for last in-order packet
-        if (TRACE > 0)
-            printf("----B: Received out-of-order packet %d, resending ACK %d\n", packet.seqnum, B_acknum);
-
-        ackpkt.seqnum = 0;
-        ackpkt.acknum = B_acknum;
-        for (int i = 0; i < 20; i++) ackpkt.payload[i] = '0';
-        ackpkt.checksum = ComputeChecksum(ackpkt);
-        tolayer3(B, ackpkt);
+        packets_received++;
+        B_acknum = expectedseqnum;
     }
 }
+
 
 /* the following routine will be called once (only) before any other */
 /* entity B routines are called. You can use it to do any initialization */
 void B_init(void)
 {
-  expectedseqnum = 0;
-  B_nextseqnum = 1;
+    expectedseqnum = 0;
+    B_acknum = 0;
+
+    for (int i = 0; i < SEQSPACE; i++) {
+        received[i] = false;
+    }
+
+    if (TRACE > 0)
+        printf("----B: Receiver initialized\n");
 }
+
 
 /******************************************************************************
  * The following functions need be completed only for bi-directional messages *
