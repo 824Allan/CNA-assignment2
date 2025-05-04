@@ -221,6 +221,8 @@ void B_input(struct pkt packet)
     }
 
     int seq = packet.seqnum;
+    printf("----B: Received packet %d\n", seq);
+
 
     // Store if not received before
     // Avoid duplicate storage
@@ -228,12 +230,15 @@ void B_input(struct pkt packet)
         receiver_buffer[seq] = packet;
         received[seq] = true;
 
-        if (TRACE > 0)
-            printf("----B: Buffered new packet %d\n", seq);
+        if (TRACE > 0) {
+            printf("----B: Buffered new packet %d\\n", seq);
+        }
     } else {
-        if (TRACE > 0)
-            printf("----B: Duplicate packet %d received, already buffered\n", seq);
+        if (TRACE > 0) {
+            printf("----B: Duplicate packet %d received, already buffered\\n", seq);
+        }
     }
+
 
 
     // Always send ACK
@@ -250,6 +255,9 @@ void B_input(struct pkt packet)
 
     // Deliver all in-order packets starting from expectedseqnum
     while (received[expectedseqnum]) {
+        printf("----B: Delivering packet %d to application\n", expectedseqnum);
+        printf("----B: ACK base moved to %d\n", (expectedseqnum + 1) % SEQSPACE);
+
         tolayer5(B, receiver_buffer[expectedseqnum].payload);
 
         // Clear buffer to avoid duplicate delivery
